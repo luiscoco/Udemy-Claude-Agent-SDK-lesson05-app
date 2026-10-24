@@ -225,6 +225,10 @@ export async function runAgent(prompt: string, emit: (event: LabEvent) => void, 
 }
 ```
 
+## UML workflow with code at every step
+
+The architecture page includes a syntax-coloured TypeScript excerpt, source filename and line range, and a code-to-workflow explanation in each of its 13 numbered steps. Excerpts are checked against source anchors by scripts/workflow-snippets.py. Whitespace changes and omitted context are labelled. SDK-managed operations show the real application configuration or observation boundary; they do not invent an SDK transport or Read implementation.
+
 ## Formatted application responses
 
 The incremental, complete assistant and final-result panels render Markdown as lists, emphasis, headings, tables and code. Marked parses the response and DOMPurify sanitizes the generated HTML before insertion. Both libraries are pinned and bundled locally with their licenses. Raw message JSON and downloaded observations retain the original text. Streaming buffers are separate and reset for every run.

@@ -72,5 +72,228 @@
       0,
       "13. Show log, JSON, pairs and outcome"
     ]
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "title": "Validate the submitted task",
+      "explanation": "The JSON body supplies the prompt and options. These actual server statements validate both before creating the SDK run.",
+      "narration": "Step one connects the request to its server code. JSON parse reads the submitted body. Validate prompt and validate config reject invalid inputs before a query starts. The source filename and line range identify these actual statements.",
+      "source": "src/server.ts",
+      "firstLine": 54,
+      "lastLine": 56,
+      "code": "const input = JSON.parse(body);\nconst prompt = validatePrompt(input.prompt);\nconst config = validateConfig(input.options);",
+      "anchors": [
+        "const input = JSON.parse(body);",
+        "const prompt = validatePrompt(input.prompt);",
+        "const config = validateConfig(input.options);"
+      ],
+      "sourceSHA256": "63458e0a39aacb961759a923306da04b51d6a7e9d44c9ce2cdd2245983e003f7",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 2,
+      "title": "Create one SDK query",
+      "explanation": "The host passes the prompt and computed options to query(). The SDK owns the subsequent model and tool interactions.",
+      "narration": "Step two creates one real query. The prompt and lesson options enter the SDK together. This application does not write its own model and tool loop. The following messages are observations from this query.",
+      "source": "src/agent.ts",
+      "firstLine": 145,
+      "lastLine": 145,
+      "code": "const run = query({\n  prompt,\n  options: lessonOptions(config, abortController)\n});",
+      "anchors": [
+        "const run = query({ prompt, options: lessonOptions(config, abortController) });"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 3,
+      "title": "Narrow system initialization",
+      "explanation": "The subtype guard selects init. Its model is one of the metadata fields copied into the classroom projection.",
+      "narration": "Step three narrows the system subtype before reading init fields. This selected projection copies the actual model into the row. The remaining metadata fields are omitted from this short excerpt and remain available in the full source.",
+      "source": "src/agent.ts",
+      "firstLine": 55,
+      "lastLine": 56,
+      "code": "if (message.subtype === \"init\") {\n  row.data = {\n    ...row.data,\n    model: message.model,\n    // Other init fields omitted.\n  };\n}",
+      "anchors": [
+        "if (message.subtype === \"init\") {",
+        "model: message.model"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 4,
+      "title": "Configure the SDK transport boundary",
+      "explanation": "These options supply the model, working directory and Read definition. The SDK sends the model request internally; these are application configuration properties, not a custom HTTP client.",
+      "narration": "Step four shows the application boundary for the SDK request. These real option properties select the model, directory and Read tool. The SDK performs transport internally; this excerpt is configuration, not an invented network implementation.",
+      "source": "src/agent.ts",
+      "firstLine": 115,
+      "lastLine": 115,
+      "code": "// Properties inside lessonOptions():\nmodel: MODEL,\ncwd: WORKSPACE,\ntools: [\"Read\"],\nallowedTools: [\"Read\"],",
+      "anchors": [
+        "model: MODEL, cwd: WORKSPACE, tools: [\"Read\"], allowedTools: [\"Read\"]"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 5,
+      "title": "Observe a model tool request",
+      "explanation": "The model chooses its output. The application observes tool_use blocks and labels the actual requested tool.",
+      "narration": "Step five connects model output to the observer branch. A tool use block is an actual model request. The summary reads its real name. Request tracking and input projection are marked as omitted, rather than presented as fabricated model-side code.",
+      "source": "src/agent.ts",
+      "firstLine": 65,
+      "lastLine": 67,
+      "code": "if (block.type === \"tool_use\") {\n  // Request tracking omitted here.\n  row.summary = `Tool request: ${block.name}`;\n  // Input projection follows in the full source.\n}",
+      "anchors": [
+        "if (block.type === \"tool_use\") {",
+        "row.summary = `Tool request: ${block.name}`;"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 6,
+      "title": "Project assistant content blocks",
+      "explanation": "The nested API message supplies its response ID and role. The blocks variable contains the safely projected content from the earlier mapping branch.",
+      "narration": "Step six shows the assistant projection. The response identifier and role come from the nested API message. Content uses the blocks already mapped by the observer. This property excerpt preserves the same SDK wrapper structure used in the selected-message viewer.",
+      "source": "src/agent.ts",
+      "firstLine": 63,
+      "lastLine": 73,
+      "code": "// Selected message property in row.data:\nmessage: {\n  id: message.message.id,\n  role: message.message.role,\n  content: blocks\n}",
+      "anchors": [
+        "const blocks = message.message.content.map((block) => {",
+        "message: { id: message.message.id, role: message.message.role, content: blocks }"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 7,
+      "title": "Guard the built-in Read tool",
+      "explanation": "The SDK executes Read. Before that execution, the actual PreToolUse hook identifies the event and resolves the requested filename; the following full guard permits only message-guide.md.",
+      "narration": "Step seven identifies the real pre-tool hook. The event check and requested filename lead into the source guard that allows only the classroom guide. The SDK runs the built-in Read implementation after permission checks; the host does not pretend to implement that tool.",
+      "source": "src/agent.ts",
+      "firstLine": 120,
+      "lastLine": 122,
+      "code": "if (input.hook_event_name !== \"PreToolUse\") {\n  return {};\n}\nconst file = (\n  input.tool_input as { file_path?: unknown }\n).file_path;\n// The next guard permits only message-guide.md.",
+      "anchors": [
+        "if (input.hook_event_name !== \"PreToolUse\") return {};",
+        "const file = (input.tool_input as { file_path?: unknown }).file_path;",
+        "resolve(WORKSPACE, file).toLowerCase() !== resolve(WORKSPACE, \"message-guide.md\").toLowerCase()"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 8,
+      "title": "Project returned file content",
+      "explanation": "The user tool_result block contains the returned content. This actual property handles text and explicitly labels omitted non-text content.",
+      "narration": "Step eight shows where actual Read output enters the displayed data. Text content is redacted before projection, and non-text content is explicitly labelled as omitted. The file read itself occurs inside the SDK; this source handles its returned result.",
+      "source": "src/agent.ts",
+      "firstLine": 83,
+      "lastLine": 83,
+      "code": "// Content property of a projected tool_result:\ncontent: typeof block.content === \"string\"\n  ? redact(block.content)\n  : \"Non-text tool content omitted.\"",
+      "anchors": [
+        "content: typeof block.content === \"string\" ? redact(block.content) : \"Non-text tool content omitted.\""
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 9,
+      "title": "Match feedback to the request",
+      "explanation": "The returned tool_use_id retrieves the earlier request. The full branch also updates state and observed request-to-feedback timing.",
+      "narration": "Step nine matches the returned tool use identifier to the request map. This is the same correlation shown in the live tool-pair card. The following source statements update completion state and observed timing.",
+      "source": "src/agent.ts",
+      "firstLine": 79,
+      "lastLine": 80,
+      "code": "if (block.type === \"tool_result\") {\n  const pair = this.pairs.get(block.tool_use_id);\n  // State and observed timing updates follow.\n}",
+      "anchors": [
+        "if (block.type === \"tool_result\") {",
+        "const pair = this.pairs.get(block.tool_use_id);"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 10,
+      "title": "Extract an incremental text delta",
+      "explanation": "The stream handler narrows event.type and delta.type. Only text_delta.text enters the incremental-text buffer.",
+      "narration": "Step ten shows the nested checks for partial output. Only text delta reaches row dot text delta. Other delta shapes do not enter the incremental text panel. The omitted statement initializes metadata, not another model turn.",
+      "source": "src/agent.ts",
+      "firstLine": 94,
+      "lastLine": 96,
+      "code": "if (event.type === \"content_block_delta\") {\n  // Delta metadata initialization omitted.\n  if (event.delta.type === \"text_delta\") {\n    row.textDelta = redact(event.delta.text);\n    delta.text = row.textDelta;\n  }\n}",
+      "anchors": [
+        "if (event.type === \"content_block_delta\") {",
+        "if (event.delta.type === \"text_delta\") { row.textDelta = redact(event.delta.text); delta.text = row.textDelta; }"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 11,
+      "title": "Collect complete assistant text",
+      "explanation": "Complete text blocks are projected independently of partial deltas. The browser then renders this complete-text buffer in its own formatted panel.",
+      "narration": "Step eleven collects complete assistant text separately. The observer sets text block rather than text delta. This distinction lets the browser format both views without appending the complete message into the streamed-text buffer again.",
+      "source": "src/agent.ts",
+      "firstLine": 64,
+      "lastLine": 64,
+      "code": "if (block.type === \"text\") {\n  row.textBlock = (row.textBlock || \"\")\n    + redact(block.text);\n  return {\n    type: block.type,\n    text: redact(block.text)\n  };\n}",
+      "anchors": [
+        "if (block.type === \"text\") { row.textBlock = (row.textBlock || \"\") + redact(block.text); return { type: block.type, text: redact(block.text) }; }"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 12,
+      "title": "Preserve the result and drain events",
+      "explanation": "The iterator records the typed outcome and continues. The surrounding try/catch distinguishes a failure before any result from a later runtime exception.",
+      "narration": "Step twelve consumes the query through completion. Got result records that a typed outcome was observed, but there is no break statement. Trailing events are still consumed. The surrounding catch preserves an observed result and rethrows failures that happened before one.",
+      "source": "src/agent.ts",
+      "firstLine": 132,
+      "lastLine": 135,
+      "code": "for await (const message of messages) {\n  const row = inspector.consume(message);\n  if (row.outcome) gotResult = true;\n  emit(row);\n}",
+      "anchors": [
+        "for await (const message of messages) {",
+        "const row = inspector.consume(message);",
+        "if (row.outcome) gotResult = true;",
+        "emit(row);"
+      ],
+      "sourceSHA256": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    },
+    {
+      "number": 13,
+      "title": "Render the selected data and answer",
+      "explanation": "These actual client statements highlight selected JSON and render final answer text through the sanitizing Markdown renderer.",
+      "narration": "Step thirteen connects observations to the student interface. The selected row is shown as coloured JSON. The final answer uses the Markdown renderer so lists, bold text and code appear as formatted content. These are actual statements from the client file.",
+      "source": "src/client.ts",
+      "firstLine": 12,
+      "lastLine": 53,
+      "code": "// In choose(row):\ncode(\"json\", row.data);\n\n// In consume(row):\nrenderMarkdown($(\"result-text\"), result.text);",
+      "anchors": [
+        "code(\"json\", row.data);",
+        "renderMarkdown($(\"result-text\"), result.text);"
+      ],
+      "sourceSHA256": "de848be35482db946a4396f7af0e8d654c6fc27c427b9352e6ce548ff515df34",
+      "language": "typescript",
+      "excerptLabel": "Selected source; whitespace reformatted and surrounding context omitted."
+    }
   ]
 }
