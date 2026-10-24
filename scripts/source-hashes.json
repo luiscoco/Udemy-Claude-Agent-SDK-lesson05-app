@@ -1,0 +1,9 @@
+{
+  "src/agent.ts": "1df1cf2eec914f7fb9d2236a391d3e65fdc2f241fd4721a5d9b58c134fa4abcc",
+  "src/client.ts": "8487d95c9f0f8bd518e3cffb2bfe24602a452cf059fdb6de1f6e010fc1df4c06",
+  "src/server.ts": "9ae0c5eaf5d13ac8551f04bd2ebcd584c1bc13aa912be88ce092d691a87b5faf",
+  "src/sample.ts": "1c8cfc2667d6750df84b7d5bd138782b58707a7a8eea628f28ada140d8a8449b",
+  "src/examples.ts": "b5f47352aa05ea799e2e46d9ec9305bdadff4c320376bf72661f57e94d7e49d6",
+  "sample-workspace/message-guide.md": "30ae6039a8e135a58e65d85fe29720396f41322da9a74dace023d09cadbec044",
+  "package.json": "2e1e304d5ffeefad73d94495fa64fc82abfe8e7fa7ed999f38fbd4d2110e48ae"
+}

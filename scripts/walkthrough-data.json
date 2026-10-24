@@ -1,0 +1,66 @@
+[
+  {
+    "number": "01",
+    "title": "Configure one Read tool",
+    "source": "src/agent.ts",
+    "explanation": "This read-only experiment asks the agent to read one harmless classroom file. maxTurns: 1 forces the limited scenario. The hook restricts reads to the bundled guide.",
+    "code": "export function lessonOptions(config: Config, abortController = new AbortController()): Options {\n  return {\n    model: MODEL, cwd: WORKSPACE, tools: [\"Read\"], allowedTools: [\"Read\"], disallowedTools: [\"Edit\", \"Write\", \"Bash\", \"Glob\", \"WebFetch\"],\n    permissionMode: \"default\", includePartialMessages: config.partial, maxTurns: config.scenario === \"limit\" ? 1 : 6,\n    maxBudgetUsd: 0.30, effort: \"low\", settingSources: [], persistSession: false, mcpServers: {}, plugins: [], abortController,\n    systemPrompt: \"For this message-inspection classroom lab, first use Read on message-guide.md with no text or other call in that first response. Wait for the content, then answer the task briefly. Read only this file. Do not claim a result before reading it.\",\n    hooks: { PreToolUse: [{ hooks: [async (input) => {\n      if (input.hook_event_name !== \"PreToolUse\") return {};\n      const file = (input.tool_input as { file_path?: unknown }).file_path;\n      if (input.tool_name !== \"Read\" || typeof file !== \"string\" || resolve(WORKSPACE, file).toLowerCase() !== resolve(WORKSPACE, \"message-guide.md\").toLowerCase()) {\n        return { hookSpecificOutput: { hookEventName: \"PreToolUse\", permissionDecision: \"deny\", permissionDecisionReason: \"Only the classroom message-guide.md is available.\" } };\n      }\n      return {};\n    }] }] },\n  };\n}",
+    "language": "typescript"
+  },
+  {
+    "number": "02",
+    "title": "Narrow system and init",
+    "source": "src/agent.ts",
+    "explanation": "Every system subtype is handled as a lifecycle event. Only init exposes init-specific fields. The browser receives an allowlisted projection, with the working directory reduced to a classroom label.",
+    "code": "      case \"system\": {\n        row.summary = `Session lifecycle: ${subtype}`;\n        if (message.subtype === \"init\") {\n          row.data = { ...row.data, model: message.model, cwd: \"sample-workspace\", tools: message.tools, permissionMode: message.permissionMode, apiKeySource: message.apiKeySource, claude_code_version: message.claude_code_version, mcp_servers: message.mcp_servers.map((m) => ({ name: m.name, status: m.status })), skills: message.skills, slash_commands: message.slash_commands };\n        }\n        // Other system subtypes are distinct union members; do not read init-only fields.\n        break;\n      }",
+    "language": "typescript"
+  },
+  {
+    "number": "03",
+    "title": "Inspect assistant blocks",
+    "source": "src/agent.ts",
+    "explanation": "The SDK wrapper contains message.message.content. Tool requests are keyed by their actual ID. Text appears in the complete-block panel. Thinking and other non-text content are identified without displaying their content.",
+    "code": "      case \"assistant\": {\n        row.summary = message.error ? `Assistant API error: ${message.error}` : \"Complete assistant content block\";\n        const blocks = message.message.content.map((block) => {\n          if (block.type === \"text\") { row.textBlock = (row.textBlock || \"\") + redact(block.text); return { type: block.type, text: redact(block.text) }; }\n          if (block.type === \"tool_use\") {\n            if (!this.pairs.has(block.id)) this.pairs.set(block.id, { id: block.id, name: block.name, state: \"requested\", requestedAt: this.now() });\n            row.summary = `Tool request: ${block.name}`;\n            const input = block.input as { file_path?: unknown };\n            return { type: block.type, id: block.id, name: block.name, input: { file_path: typeof input.file_path === \"string\" ? redact(basename(input.file_path)) : \"Not provided\" } };\n          }\n          return { type: block.type, note: \"Non-text content omitted from the classroom projection.\" };\n        });\n        row.data = { ...row.data, error: message.error, parent_tool_use_id: message.parent_tool_use_id, message: { id: message.message.id, role: message.message.role, content: blocks } };\n        break;\n      }",
+    "language": "typescript"
+  },
+  {
+    "number": "04",
+    "title": "Match user tool results",
+    "source": "src/agent.ts",
+    "explanation": "A user message can be tool feedback rather than a person typing. Its tool_use_id joins the earlier request. The elapsed time measures receipt-to-receipt observation, including runtime scheduling; it is not a provider billing duration.",
+    "code": "      case \"user\": {\n        row.summary = \"User input or tool feedback\";\n        const blocks = typeof message.message.content === \"string\" ? [{ type: \"text\", text: redact(message.message.content) }] : message.message.content.map((block) => {\n          if (block.type === \"tool_result\") {\n            const pair = this.pairs.get(block.tool_use_id);\n            if (pair) { pair.state = block.is_error ? \"error\" : \"completed\"; pair.elapsedMs = Math.max(0, this.now() - pair.requestedAt); }\n            row.summary = `Tool feedback: ${pair?.name || \"unmatched request\"}`;\n            return { type: block.type, tool_use_id: block.tool_use_id, is_error: Boolean(block.is_error), content: typeof block.content === \"string\" ? redact(block.content) : \"Non-text tool content omitted.\" };\n          }\n          return { type: block.type, note: \"Additional input block\" };\n        });\n        row.data = { ...row.data, parent_tool_use_id: message.parent_tool_use_id, message: { role: \"user\", content: blocks } };\n        break;\n      }",
+    "language": "typescript"
+  },
+  {
+    "number": "05",
+    "title": "Extract text deltas safely",
+    "source": "src/agent.ts",
+    "explanation": "Check three nested discriminators before reading text. Complete assistant blocks still arrive, so this app uses a separate incremental panel and never appends the complete text to that panel.",
+    "code": "      case \"stream_event\": {\n        const event = message.event;\n        row.summary = `Partial event: ${event.type}`;\n        let delta: Record<string, unknown> | undefined;\n        if (event.type === \"content_block_delta\") {\n          delta = { type: event.delta.type };\n          if (event.delta.type === \"text_delta\") { row.textDelta = redact(event.delta.text); delta.text = row.textDelta; }\n        }\n        row.data = { ...row.data, parent_tool_use_id: message.parent_tool_use_id, event: { type: event.type, ...(\"index\" in event ? { index: event.index } : {}), ...(delta ? { delta } : {}) } };\n        break;\n      }",
+    "language": "typescript"
+  },
+  {
+    "number": "06",
+    "title": "Read the typed result",
+    "source": "src/agent.ts",
+    "explanation": "The success subtype has result; error subtypes have errors[]. Check is_error as well: a success-shaped message can carry an API error. A refusal is visible in stop_reason. usage describes the main loop; modelUsage contains broader query-pipeline totals when present.",
+    "code": "export function resultFields(message: SDKResultMessage): Outcome {\n  return {\n    subtype: message.subtype, is_error: message.is_error,\n    text: redact(message.subtype === \"success\" ? message.result : message.errors.join(\"\\n\")),\n    session_id: message.session_id, num_turns: message.num_turns,\n    total_cost_usd: message.total_cost_usd, duration_ms: message.duration_ms, duration_api_ms: message.duration_api_ms,\n    stop_reason: message.stop_reason, usage: numbers(message.usage),\n    modelUsage: Object.fromEntries(Object.entries(message.modelUsage || {}).map(([name, value]) => [name, numbers(value)])),\n    permission_denials: (message.permission_denials || []).map((d) => ({ tool_name: d.tool_name, tool_use_id: d.tool_use_id })),\n  };\n}",
+    "language": "typescript"
+  },
+  {
+    "number": "07",
+    "title": "Consume through trailing events",
+    "source": "src/agent.ts",
+    "explanation": "Do not break at the result. Preserve a typed outcome if the single-prompt runtime subsequently throws. An exception before any result remains a failure; no result is invented.",
+    "code": "export async function observeRun(messages: AsyncIterable<SDKMessage>, emit: (event: LabEvent) => void) {\n  const inspector = new MessageInspector(); let gotResult = false;\n  try {\n    for await (const message of messages) {\n      const row = inspector.consume(message);\n      if (row.outcome) gotResult = true;\n      emit(row);\n    }\n    if (!gotResult) throw new Error(\"The stream ended without a final SDK result.\");\n  } catch (error) {\n    if (!gotResult) throw error;\n    emit({ type: \"notice\", text: \"The runtime closed after yielding a result; its observed outcome is preserved.\" });\n  }\n}",
+    "language": "typescript"
+  },
+  {
+    "number": "08",
+    "title": "Close the query reliably",
+    "source": "src/agent.ts",
+    "explanation": "The finally block closes the real SDK query. The host streams only the projected observations. Private configuration and dependency folders are not served by the static router.",
+    "code": "export async function runAgent(prompt: string, emit: (event: LabEvent) => void, abortController = new AbortController(), config = DEFAULT_CONFIG) {\n  config = validateConfig(config); emit({ type: \"config\", options: config });\n  const run = query({ prompt, options: lessonOptions(config, abortController) });\n  try { await observeRun(run, emit); }\n  finally { run.close(); }\n}",
+    "language": "typescript"
+  }
+]

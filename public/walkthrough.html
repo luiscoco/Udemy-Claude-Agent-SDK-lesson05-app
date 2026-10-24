@@ -1,0 +1,98 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent SDK LESSON 05 · Explain the &lt;em&gt;message handler.&lt;/em&gt;</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/code-highlighting.css"></head><body><main><div class="brand"><a href="/">How <span>Claude Agent SDK</span> Works</a><span class="badge">LESSON 05 / MESSAGE TYPES EXPLORER</span></div><header class="hero"><div><div class="eyebrow">NARROW · INSPECT · CORRELATE · HANDLE</div><h1>Explain the <em>message handler.</em></h1><p class="lead">Follow actual TypeScript source excerpts for every core type, streaming and error handling.</p></div><img src="/astronaut.png" alt="Course astronaut mascot"></header><nav class="nav" aria-label="Application sections"><a href="/">Application lab</a><a href="/learn.html">What you will learn</a><a href="/run.html">How to run</a><a href="/architecture.html">Architecture & workflow</a><a href="/walkthrough.html" aria-current="page">Code walkthrough</a><button id="theme" type="button">Dark mode</button></nav><section class="step"><span class="number">01</span><h2>Configure one Read tool</h2><p>This read-only experiment asks the agent to read one harmless classroom file. maxTurns: 1 forces the limited scenario. The hook restricts reads to the bundled guide.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">export function lessonOptions(config: Config, abortController = new AbortController()): Options {
+  return {
+    model: MODEL, cwd: WORKSPACE, tools: [&quot;Read&quot;], allowedTools: [&quot;Read&quot;], disallowedTools: [&quot;Edit&quot;, &quot;Write&quot;, &quot;Bash&quot;, &quot;Glob&quot;, &quot;WebFetch&quot;],
+    permissionMode: &quot;default&quot;, includePartialMessages: config.partial, maxTurns: config.scenario === &quot;limit&quot; ? 1 : 6,
+    maxBudgetUsd: 0.30, effort: &quot;low&quot;, settingSources: [], persistSession: false, mcpServers: {}, plugins: [], abortController,
+    systemPrompt: &quot;For this message-inspection classroom lab, first use Read on message-guide.md with no text or other call in that first response. Wait for the content, then answer the task briefly. Read only this file. Do not claim a result before reading it.&quot;,
+    hooks: { PreToolUse: [{ hooks: [async (input) =&gt; {
+      if (input.hook_event_name !== &quot;PreToolUse&quot;) return {};
+      const file = (input.tool_input as { file_path?: unknown }).file_path;
+      if (input.tool_name !== &quot;Read&quot; || typeof file !== &quot;string&quot; || resolve(WORKSPACE, file).toLowerCase() !== resolve(WORKSPACE, &quot;message-guide.md&quot;).toLowerCase()) {
+        return { hookSpecificOutput: { hookEventName: &quot;PreToolUse&quot;, permissionDecision: &quot;deny&quot;, permissionDecisionReason: &quot;Only the classroom message-guide.md is available.&quot; } };
+      }
+      return {};
+    }] }] },
+  };
+}</code></pre></section><section class="step"><span class="number">02</span><h2>Narrow system and init</h2><p>Every system subtype is handled as a lifecycle event. Only init exposes init-specific fields. The browser receives an allowlisted projection, with the working directory reduced to a classroom label.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">      case &quot;system&quot;: {
+        row.summary = `Session lifecycle: ${subtype}`;
+        if (message.subtype === &quot;init&quot;) {
+          row.data = { ...row.data, model: message.model, cwd: &quot;sample-workspace&quot;, tools: message.tools, permissionMode: message.permissionMode, apiKeySource: message.apiKeySource, claude_code_version: message.claude_code_version, mcp_servers: message.mcp_servers.map((m) =&gt; ({ name: m.name, status: m.status })), skills: message.skills, slash_commands: message.slash_commands };
+        }
+        // Other system subtypes are distinct union members; do not read init-only fields.
+        break;
+      }</code></pre></section><section class="step"><span class="number">03</span><h2>Inspect assistant blocks</h2><p>The SDK wrapper contains message.message.content. Tool requests are keyed by their actual ID. Text appears in the complete-block panel. Thinking and other non-text content are identified without displaying their content.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">      case &quot;assistant&quot;: {
+        row.summary = message.error ? `Assistant API error: ${message.error}` : &quot;Complete assistant content block&quot;;
+        const blocks = message.message.content.map((block) =&gt; {
+          if (block.type === &quot;text&quot;) { row.textBlock = (row.textBlock || &quot;&quot;) + redact(block.text); return { type: block.type, text: redact(block.text) }; }
+          if (block.type === &quot;tool_use&quot;) {
+            if (!this.pairs.has(block.id)) this.pairs.set(block.id, { id: block.id, name: block.name, state: &quot;requested&quot;, requestedAt: this.now() });
+            row.summary = `Tool request: ${block.name}`;
+            const input = block.input as { file_path?: unknown };
+            return { type: block.type, id: block.id, name: block.name, input: { file_path: typeof input.file_path === &quot;string&quot; ? redact(basename(input.file_path)) : &quot;Not provided&quot; } };
+          }
+          return { type: block.type, note: &quot;Non-text content omitted from the classroom projection.&quot; };
+        });
+        row.data = { ...row.data, error: message.error, parent_tool_use_id: message.parent_tool_use_id, message: { id: message.message.id, role: message.message.role, content: blocks } };
+        break;
+      }</code></pre></section><section class="step"><span class="number">04</span><h2>Match user tool results</h2><p>A user message can be tool feedback rather than a person typing. Its tool_use_id joins the earlier request. The elapsed time measures receipt-to-receipt observation, including runtime scheduling; it is not a provider billing duration.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">      case &quot;user&quot;: {
+        row.summary = &quot;User input or tool feedback&quot;;
+        const blocks = typeof message.message.content === &quot;string&quot; ? [{ type: &quot;text&quot;, text: redact(message.message.content) }] : message.message.content.map((block) =&gt; {
+          if (block.type === &quot;tool_result&quot;) {
+            const pair = this.pairs.get(block.tool_use_id);
+            if (pair) { pair.state = block.is_error ? &quot;error&quot; : &quot;completed&quot;; pair.elapsedMs = Math.max(0, this.now() - pair.requestedAt); }
+            row.summary = `Tool feedback: ${pair?.name || &quot;unmatched request&quot;}`;
+            return { type: block.type, tool_use_id: block.tool_use_id, is_error: Boolean(block.is_error), content: typeof block.content === &quot;string&quot; ? redact(block.content) : &quot;Non-text tool content omitted.&quot; };
+          }
+          return { type: block.type, note: &quot;Additional input block&quot; };
+        });
+        row.data = { ...row.data, parent_tool_use_id: message.parent_tool_use_id, message: { role: &quot;user&quot;, content: blocks } };
+        break;
+      }</code></pre></section><section class="step"><span class="number">05</span><h2>Extract text deltas safely</h2><p>Check three nested discriminators before reading text. Complete assistant blocks still arrive, so this app uses a separate incremental panel and never appends the complete text to that panel.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">      case &quot;stream_event&quot;: {
+        const event = message.event;
+        row.summary = `Partial event: ${event.type}`;
+        let delta: Record&lt;string, unknown&gt; | undefined;
+        if (event.type === &quot;content_block_delta&quot;) {
+          delta = { type: event.delta.type };
+          if (event.delta.type === &quot;text_delta&quot;) { row.textDelta = redact(event.delta.text); delta.text = row.textDelta; }
+        }
+        row.data = { ...row.data, parent_tool_use_id: message.parent_tool_use_id, event: { type: event.type, ...(&quot;index&quot; in event ? { index: event.index } : {}), ...(delta ? { delta } : {}) } };
+        break;
+      }</code></pre></section><section class="step"><span class="number">06</span><h2>Read the typed result</h2><p>The success subtype has result; error subtypes have errors[]. Check is_error as well: a success-shaped message can carry an API error. A refusal is visible in stop_reason. usage describes the main loop; modelUsage contains broader query-pipeline totals when present.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">export function resultFields(message: SDKResultMessage): Outcome {
+  return {
+    subtype: message.subtype, is_error: message.is_error,
+    text: redact(message.subtype === &quot;success&quot; ? message.result : message.errors.join(&quot;\n&quot;)),
+    session_id: message.session_id, num_turns: message.num_turns,
+    total_cost_usd: message.total_cost_usd, duration_ms: message.duration_ms, duration_api_ms: message.duration_api_ms,
+    stop_reason: message.stop_reason, usage: numbers(message.usage),
+    modelUsage: Object.fromEntries(Object.entries(message.modelUsage || {}).map(([name, value]) =&gt; [name, numbers(value)])),
+    permission_denials: (message.permission_denials || []).map((d) =&gt; ({ tool_name: d.tool_name, tool_use_id: d.tool_use_id })),
+  };
+}</code></pre></section><section class="step"><span class="number">07</span><h2>Consume through trailing events</h2><p>Do not break at the result. Preserve a typed outcome if the single-prompt runtime subsequently throws. An exception before any result remains a failure; no result is invented.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">export async function observeRun(messages: AsyncIterable&lt;SDKMessage&gt;, emit: (event: LabEvent) =&gt; void) {
+  const inspector = new MessageInspector(); let gotResult = false;
+  try {
+    for await (const message of messages) {
+      const row = inspector.consume(message);
+      if (row.outcome) gotResult = true;
+      emit(row);
+    }
+    if (!gotResult) throw new Error(&quot;The stream ended without a final SDK result.&quot;);
+  } catch (error) {
+    if (!gotResult) throw error;
+    emit({ type: &quot;notice&quot;, text: &quot;The runtime closed after yielding a result; its observed outcome is preserved.&quot; });
+  }
+}</code></pre></section><section class="step"><span class="number">08</span><h2>Close the query reliably</h2><p>The finally block closes the real SDK query. The host streams only the projected observations. Private configuration and dependency folders are not served by the static router.</p><p class="source">Source: src/agent.ts</p><pre><code class="language-typescript">export async function runAgent(prompt: string, emit: (event: LabEvent) =&gt; void, abortController = new AbortController(), config = DEFAULT_CONFIG) {
+  config = validateConfig(config); emit({ type: &quot;config&quot;, options: config });
+  const run = query({ prompt, options: lessonOptions(config, abortController) });
+  try { await observeRun(run, emit); }
+  finally { run.close(); }
+}</code></pre></section><section class="step"><h2>TypeScript ↔ Python reference</h2><div class="table"><table><thead><tr><th>Concept</th><th>TypeScript</th><th>Python</th></tr></thead><tbody><tr><td>Narrow message</td><td>message.type</td><td>isinstance(message, Class)</td></tr><tr><td>Init session</td><td>message.session_id</td><td>message.data["session_id"]</td></tr><tr><td>Assistant blocks</td><td>message.message.content</td><td>message.content</td></tr><tr><td>Partials option</td><td>includePartialMessages</td><td>include_partial_messages</td></tr><tr><td>Accounting</td><td>modelUsage</td><td>model_usage; optional values need None checks</td></tr></tbody></table></div><pre><code class="language-python"># Reference mapping only; this application runs TypeScript.
+if isinstance(msg, SystemMessage) and msg.subtype == &quot;init&quot;:
+    print(msg.data[&quot;session_id&quot;])
+elif isinstance(msg, AssistantMessage):
+    for block in msg.content:
+        if isinstance(block, TextBlock):
+            print(block.text)
+elif isinstance(msg, ResultMessage):
+    print(msg.subtype)
+    if msg.total_cost_usd is not None:
+        print(msg.total_cost_usd)</code></pre></section><div class="actions"><a class="button" href="/architecture.html">← UML sequence</a><a class="button" href="/">Try the experiments →</a></div><footer>CLAUDE AGENT SDK · LESSON 05 · SYSTEM · ASSISTANT · USER · STREAM · RESULT<br>TypeScript · local runtime · API key stays on the server</footer></main><script src="/navigation.js"></script><script src="/prism.js"></script><script src="/prism-python.min.js"></script><script src="/code-highlighting.js"></script></body></html>

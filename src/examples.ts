@@ -1,0 +1,11 @@
+// Explicit classroom examples. These are never substituted for live SDK responses.
+export const examples = [
+  { id: "init", title: "system / init", note: "Illustrative metadata. No live session was created.", data: { type: "system", subtype: "init", session_id: "example-session", model: "your-configured-model", tools: ["Read"], cwd: "sample-workspace", apiKeySource: "ANTHROPIC_API_KEY" } },
+  { id: "compact", title: "system / compact_boundary", note: "A short live run may never compact. This example is illustrative.", data: { type: "system", subtype: "compact_boundary", compact_metadata: { trigger: "auto", pre_tokens: 120000 } } },
+  { id: "thinking", title: "assistant / thinking", note: "The app identifies this block type but omits its content.", data: { type: "assistant", message: { id: "example-response", content: [{ type: "thinking", note: "Content omitted from the classroom projection." }] } } },
+  { id: "api-error", title: "assistant.error", note: "Illustrative API error category; no invalid key or quota failure is triggered.", data: { type: "assistant", error: "rate_limit", message: { content: [{ type: "text", text: "Example API error." }] } } },
+  { id: "delta", title: "stream_event / text_delta", note: "Nested narrowing is required before reading delta.text.", data: { type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hello" } } } },
+  { id: "refusal", title: "result / refusal stop reason", note: "Inspect stop_reason independently from subtype and is_error. This is an example only.", data: { type: "result", subtype: "success", is_error: false, result: "Illustrative declined request.", stop_reason: "refusal" } },
+  { id: "error-result", title: "result / error_max_turns", note: "Error variants carry errors[]. There is no result string on this shape.", data: { type: "result", subtype: "error_max_turns", is_error: true, errors: ["Reached maximum number of turns (1)"] } },
+  { id: "no-result", title: "Exception with no result", note: "A connection/process failure can throw before any result. Report failure; do not fabricate a result message.", data: { origin: "illustrative host exception", exception: "Connection or process failed before result", resultReceived: false } },
+];
