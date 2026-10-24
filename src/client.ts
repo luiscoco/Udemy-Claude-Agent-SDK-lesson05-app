@@ -1,9 +1,10 @@
-export {};
+import { renderMarkdown } from "./markdown.js";
 declare const Prism: { highlightElement: (element: Element) => void };
 type Row = { sequence: number; sdkType: string; subtype: string; summary: string; data: Record<string, any>; counts: Record<string, number>; pairs: any[]; textDelta?: string; textBlock?: string; outcome?: any };
 const $ = (id: string) => document.getElementById(id)!;
 const field = (id: string) => $(id) as HTMLInputElement;
 const rows: Row[] = [];
+const responseText = { delta: "", answer: "" };
 let running = false, selected = 0;
 function code(id: string, value: unknown) { $(id).textContent = JSON.stringify(value, null, 2); Prism.highlightElement($(id)); }
 function choose(row: Row) {
@@ -42,14 +43,14 @@ function consume(row: Row) {
   $("messages").textContent = String(rows.length);
   for (const type of ["system", "assistant", "user", "stream_event", "result"]) $("count-" + type).textContent = String(row.counts[type] || 0);
   $("count-other").textContent = String(Object.entries(row.counts).filter(([type]) => !["system", "assistant", "user", "stream_event", "result"].includes(type)).reduce((n, [, count]) => n + count, 0));
-  if (row.textDelta) $("delta").textContent += row.textDelta;
-  if (row.textBlock) $("answer").textContent += row.textBlock + "\n\n";
+  if (row.textDelta) { responseText.delta += row.textDelta; renderMarkdown($("delta"), responseText.delta); }
+  if (row.textBlock) { responseText.answer += row.textBlock + "\n\n"; renderMarkdown($("answer"), responseText.answer); }
   if (row.sdkType === "system" && row.subtype === "init") code("init", row.data);
   pairs(row.pairs);
   if (row.outcome) {
     const result = row.outcome; $("status").textContent = result.subtype; $("turns").textContent = String(result.num_turns); $("cost").textContent = "$" + result.total_cost_usd.toFixed(4);
     $("stop").textContent = result.stop_reason || "null"; $("duration").textContent = `${result.duration_ms} ms total · ${result.duration_api_ms} ms API`;
-    $("session").textContent = result.session_id; $("result-text").textContent = result.text;
+    $("session").textContent = result.session_id; renderMarkdown($("result-text"), result.text);
     code("usage", { usage: result.usage, modelUsage: result.modelUsage, permission_denials: result.permission_denials });
     $("outcome-kind").textContent = result.is_error ? "SDK error outcome" : result.stop_reason === "refusal" ? "Refusal stop reason" : "SDK completed";
   }
@@ -65,6 +66,7 @@ $("download").onclick = () => {
 $("form").onsubmit = async (event) => {
   event.preventDefault(); if (running) return; running = true; field("run").disabled = true;
   rows.length = 0; selected = 0; $("events").replaceChildren(); pairs([]);
+  responseText.delta = ""; responseText.answer = "";
   for (const id of ["answer", "delta", "notice", "result-text", "session", "duration", "stop", "outcome-kind"]) $(id).textContent = "";
   for (const id of ["messages", "turns", "count-system", "count-assistant", "count-user", "count-stream_event", "count-result", "count-other"]) $(id).textContent = "0";
   for (const id of ["json", "init", "usage"]) code(id, { state: "Waiting for this run" });

@@ -1,6 +1,8 @@
+import { renderMarkdown } from "./markdown.js";
 const $ = (id) => document.getElementById(id);
 const field = (id) => $(id);
 const rows = [];
+const responseText = { delta: "", answer: "" };
 let running = false, selected = 0;
 function code(id, value) { $(id).textContent = JSON.stringify(value, null, 2); Prism.highlightElement($(id)); }
 function choose(row) {
@@ -56,10 +58,14 @@ function consume(row) {
     for (const type of ["system", "assistant", "user", "stream_event", "result"])
         $("count-" + type).textContent = String(row.counts[type] || 0);
     $("count-other").textContent = String(Object.entries(row.counts).filter(([type]) => !["system", "assistant", "user", "stream_event", "result"].includes(type)).reduce((n, [, count]) => n + count, 0));
-    if (row.textDelta)
-        $("delta").textContent += row.textDelta;
-    if (row.textBlock)
-        $("answer").textContent += row.textBlock + "\n\n";
+    if (row.textDelta) {
+        responseText.delta += row.textDelta;
+        renderMarkdown($("delta"), responseText.delta);
+    }
+    if (row.textBlock) {
+        responseText.answer += row.textBlock + "\n\n";
+        renderMarkdown($("answer"), responseText.answer);
+    }
     if (row.sdkType === "system" && row.subtype === "init")
         code("init", row.data);
     pairs(row.pairs);
@@ -71,7 +77,7 @@ function consume(row) {
         $("stop").textContent = result.stop_reason || "null";
         $("duration").textContent = `${result.duration_ms} ms total · ${result.duration_api_ms} ms API`;
         $("session").textContent = result.session_id;
-        $("result-text").textContent = result.text;
+        renderMarkdown($("result-text"), result.text);
         code("usage", { usage: result.usage, modelUsage: result.modelUsage, permission_denials: result.permission_denials });
         $("outcome-kind").textContent = result.is_error ? "SDK error outcome" : result.stop_reason === "refusal" ? "Refusal stop reason" : "SDK completed";
     }
@@ -109,6 +115,8 @@ $("form").onsubmit = async (event) => {
     selected = 0;
     $("events").replaceChildren();
     pairs([]);
+    responseText.delta = "";
+    responseText.answer = "";
     for (const id of ["answer", "delta", "notice", "result-text", "session", "duration", "stop", "outcome-kind"])
         $(id).textContent = "";
     for (const id of ["messages", "turns", "count-system", "count-assistant", "count-user", "count-stream_event", "count-result", "count-other"])
@@ -182,4 +190,3 @@ fetch("/api/examples").then((r) => r.json()).then((examples) => {
     select.onchange = show;
     show();
 });
-export {};

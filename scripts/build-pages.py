@@ -19,10 +19,22 @@ STYLE='''
 (PUBLIC/'style.css').write_text(STYLE,encoding='utf-8')
 (PUBLIC/'navigation.js').write_text('''(()=>{const key="agent-sdk-lesson05-theme";try{document.documentElement.dataset.theme=localStorage.getItem(key)||"light"}catch{}const b=document.getElementById("theme");function label(){b.textContent=document.documentElement.dataset.theme==="dark"?"Light mode":"Dark mode"}label();b.onclick=()=>{document.documentElement.dataset.theme=document.documentElement.dataset.theme==="dark"?"light":"dark";try{localStorage.setItem(key,document.documentElement.dataset.theme)}catch{}label()}})();''',encoding='utf-8')
 
+# Bundle renderer assets so responses format without a CDN connection.
+for source,name in [
+ ('marked/lib/marked.umd.js','marked.umd.js'),
+ ('marked/LICENSE','marked-LICENSE.txt'),
+ ('dompurify/dist/purify.min.js','purify.min.js'),
+ ('dompurify/LICENSE','dompurify-LICENSE.txt'),
+ ('dompurify/LICENSE-MPL','dompurify-LICENSE-MPL.txt'),
+]:
+ source=APP/'node_modules'/source
+ if source.exists():shutil.copyfile(source,PUBLIC/name)
+ elif not (PUBLIC/name).exists():raise FileNotFoundError('Required bundled renderer asset: '+name)
+
 NAV=[('/', 'Application lab'),('/learn.html','What you will learn'),('/run.html','How to run'),('/architecture.html','Architecture & workflow'),('/walkthrough.html','Code walkthrough')]
 def document(path,title,subtitle,body,extra=''):
  nav=''.join(f'<a href="{url}"'+(' aria-current="page"' if url==path else '')+'>'+label+'</a>' for url,label in NAV)
- html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent SDK LESSON 05 · '+escape(title)+'</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/code-highlighting.css"></head><body><main><div class="brand"><a href="/">How <span>Claude Agent SDK</span> Works</a><span class="badge">LESSON 05 / MESSAGE TYPES EXPLORER</span></div><header class="hero"><div><div class="eyebrow">NARROW · INSPECT · CORRELATE · HANDLE</div><h1>'+title+'</h1><p class="lead">'+subtitle+'</p></div><img src="/astronaut.png" alt="Course astronaut mascot"></header><nav class="nav" aria-label="Application sections">'+nav+'<button id="theme" type="button">Dark mode</button></nav>'+body+'<footer>CLAUDE AGENT SDK · LESSON 05 · SYSTEM · ASSISTANT · USER · STREAM · RESULT<br>TypeScript · local runtime · API key stays on the server</footer></main><script src="/navigation.js"></script><script src="/prism.js"></script><script src="/prism-python.min.js"></script><script src="/code-highlighting.js"></script>'+extra+'</body></html>'
+ html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent SDK LESSON 05 · '+escape(title)+'</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/code-highlighting.css"></head><body><main><div class="brand"><a href="/">How <span>Claude Agent SDK</span> Works</a><span class="badge">LESSON 05 / MESSAGE TYPES EXPLORER</span></div><header class="hero"><div><div class="eyebrow">NARROW · INSPECT · CORRELATE · HANDLE</div><h1>'+title+'</h1><p class="lead">'+subtitle+'</p></div><img src="/astronaut.png" alt="Course astronaut mascot"></header><nav class="nav" aria-label="Application sections">'+nav+'<button id="theme" type="button">Dark mode</button></nav>'+body+'<footer>CLAUDE AGENT SDK · LESSON 05 · SYSTEM · ASSISTANT · USER · STREAM · RESULT<br>TypeScript · local runtime · API key stays on the server</footer></main><script src="/navigation.js"></script><script src="/prism.js"></script><script src="/prism-python.min.js"></script><script src="/code-highlighting.js"></script><script src="/marked.umd.js"></script><script src="/purify.min.js"></script>'+extra+'</body></html>'
  (PUBLIC/('index.html' if path=='/' else path[1:])).write_text(html,encoding='utf-8')
 def snippet(value,lang='typescript'):return '<pre><code class="language-'+lang+'">'+escape(value)+'</code></pre>'
 def cards(items):return '<div class="grid">'+''.join(f'<article class="card"><span class="number">{i:02}</span><h3>{escape(a)}</h3><p>{escape(b)}</p></article>' for i,(a,b) in enumerate(items,1))+'</div>'

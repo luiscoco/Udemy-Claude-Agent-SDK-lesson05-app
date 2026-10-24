@@ -225,6 +225,10 @@ export async function runAgent(prompt: string, emit: (event: LabEvent) => void, 
 }
 ```
 
+## Formatted application responses
+
+The incremental, complete assistant and final-result panels render Markdown as lists, emphasis, headings, tables and code. Marked parses the response and DOMPurify sanitizes the generated HTML before insertion. Both libraries are pinned and bundled locally with their licenses. Raw message JSON and downloaded observations retain the original text. Streaming buffers are separate and reset for every run.
+
 ## TypeScript and Python
 
 The live app is TypeScript. Python reads AssistantMessage.content directly, while TypeScript reads message.message.content. Python init fields live in SystemMessage.data. Python cost/usage/model_usage can be optional; check for None. The student walkthrough includes a comparison table and a labelled reference example. No Python installation is needed to run the app.
